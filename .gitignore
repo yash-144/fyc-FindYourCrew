@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -39,3 +40,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code skills cache (fetched per skills-lock.json, not vendored)
+/.agents/
+
+# cloudflare workers
+.wrangler/
+
+# supabase cli
+supabase/.temp/
+
+# raw/source sprite assets (staging only — public/sprites/ holds what's
+# actually deployed; this folder can contain unlicensed reference material
+# and should never be committed)
+/sprites/
