@@ -1,26 +1,564 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-paper: #f3f0e8;
+  --color-card: #fbfaf5;
+  --color-ink: #151515;
+  --color-ink-60: rgba(21, 21, 21, 0.62);
+  --color-ink-35: rgba(21, 21, 21, 0.35);
+  --color-line: rgba(21, 21, 21, 0.16);
+  --color-red: #f04a32;
+  --color-red-tint: rgba(240, 74, 50, 0.08);
+  --color-mustard: #d8a928;
+  --color-mustard-tint: rgba(216, 169, 40, 0.1);
+
+  /* Dark "spaceship" set — the crew-facing experience (everything but admin).
+     Kept alongside the paper/ink tokens above rather than replacing them, so
+     admin keeps its own look untouched. */
+  --color-space: #0b0d16;
+  --color-space-panel: #151827;
+  --color-space-panel-raised: #1d2136;
+  --color-space-line: rgba(255, 255, 255, 0.12);
+  --color-starlight: #eef1fb;
+  --color-starlight-dim: rgba(238, 241, 251, 0.6);
+  --color-go: #4fb455;
+  --color-go-tint: rgba(79, 180, 85, 0.12);
+
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
 }
 
 @theme inline {
+  --color-paper: var(--color-paper);
+  --color-card: var(--color-card);
+  --color-ink: var(--color-ink);
+  --color-ink-60: var(--color-ink-60);
+  --color-ink-35: var(--color-ink-35);
+  --color-line: var(--color-line);
+  --color-red: var(--color-red);
+  --color-red-tint: var(--color-red-tint);
+  --color-mustard: var(--color-mustard);
+  --color-mustard-tint: var(--color-mustard-tint);
+  --color-space: var(--color-space);
+  --color-space-panel: var(--color-space-panel);
+  --color-space-panel-raised: var(--color-space-panel-raised);
+  --color-space-line: var(--color-space-line);
+  --color-starlight: var(--color-starlight);
+  --color-starlight-dim: var(--color-starlight-dim);
+  --color-go: var(--color-go);
+  --color-go-tint: var(--color-go-tint);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --font-display: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-sans: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
+
+::selection {
+  background: var(--color-red);
+  color: var(--color-paper);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Typography                                                                  */
+/* -------------------------------------------------------------------------- */
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.meta-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-60);
+}
+
+.meta-label-red {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-red);
+}
+
+.mark {
+  color: var(--color-red);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cards / field artifacts                                                    */
+/* -------------------------------------------------------------------------- */
+
+.field-card {
+  background: var(--color-card);
+  border: 1.5px solid var(--color-ink);
+  border-radius: 14px;
+}
+
+.field-card-flat {
+  background: var(--color-card);
+  border: 1.5px solid var(--color-line);
+  border-radius: 14px;
+}
+
+.tilt-l {
+  transform: rotate(-0.6deg);
+}
+.tilt-r {
+  transform: rotate(0.5deg);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Buttons                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  padding: 0.85rem 1.5rem;
+  color: var(--color-paper);
+  background: var(--color-ink);
+  border: 1.5px solid var(--color-ink);
+  border-radius: 10px;
+  transition: transform 120ms ease, background-color 150ms ease, color 150ms ease;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-red);
+  border-color: var(--color-red);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.7rem 1.25rem;
+  color: var(--color-ink);
+  background: transparent;
+  border: 1.5px solid var(--color-ink);
+  border-radius: 10px;
+  transition: background-color 150ms ease, color 150ms ease, transform 120ms ease;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.8rem;
+  color: var(--color-ink-60);
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.btn-ghost:hover {
+  color: var(--color-red);
+  border-color: var(--color-line);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Inputs                                                                      */
+/* -------------------------------------------------------------------------- */
+
+.input-field {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: var(--color-card);
+  border: 1.5px solid var(--color-line);
+  border-radius: 10px;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.input-field::placeholder {
+  color: var(--color-ink-35);
+}
+.input-field:focus {
+  border-color: var(--color-ink);
+}
+.input-field:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Identity-card answer options (quiz)                                        */
+/* -------------------------------------------------------------------------- */
+
+.option-card {
+  position: relative;
+  text-align: left;
+  padding: 1rem 1.1rem;
+  background: var(--color-card);
+  border: 1.5px solid var(--color-line);
+  border-radius: 12px;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+.option-card:hover {
+  border-color: var(--color-ink);
+}
+.option-card.is-selected {
+  border-color: var(--color-red);
+  background: var(--color-red-tint);
+  transform: translateX(2px);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Chips / signal tags                                                        */
+/* -------------------------------------------------------------------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.6rem;
+  border: 1.5px solid var(--color-ink);
+  border-radius: 999px;
+  color: var(--color-ink);
+  background: var(--color-card);
+}
+.chip-red {
+  border-color: var(--color-red);
+  color: var(--color-red);
+  background: var(--color-red-tint);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hairline dividers                                                          */
+/* -------------------------------------------------------------------------- */
+
+.hairline {
+  border-top: 1.5px solid var(--color-line);
+}
+
+.asterisk {
+  font-family: var(--font-mono);
+  color: var(--color-red);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Progress dots                                                              */
+/* -------------------------------------------------------------------------- */
+
+.progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-line);
+}
+.progress-dot.is-done {
+  background: var(--color-red);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Motion                                                                      */
+/* -------------------------------------------------------------------------- */
+
+@keyframes draw-line {
+  from { stroke-dashoffset: var(--line-length, 200); }
+  to { stroke-dashoffset: 0; }
+}
+.draw-in path {
+  stroke-dasharray: var(--line-length, 200);
+  stroke-dashoffset: var(--line-length, 200);
+  animation: draw-line 900ms ease forwards;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fade-up 400ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw-in path { animation: none; stroke-dashoffset: 0; }
+  .fade-up { animation: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lobby crew-assembly scene                                                  */
+/* -------------------------------------------------------------------------- */
+
+.crew-room, .space-bg {
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(63, 127, 224, 0.10), transparent 60%),
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 25% 65%, rgba(255,255,255,0.35), transparent),
+    radial-gradient(1.5px 1.5px at 40% 15%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 60% 40%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1.5px 1.5px at 75% 70%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 85% 25%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 92% 55%, rgba(255,255,255,0.35), transparent),
+    linear-gradient(180deg, #10131c 0%, #0b0d14 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+/* Crewmate motion (entrance + idle sway) is driven by a spring-physics loop
+   in lobby-client.tsx, writing `transform` directly to the DOM each frame —
+   deliberately not a CSS animation here, since a keyframe animation targeting
+   `transform` would override the per-frame inline transform outright rather
+   than compose with it. */
+
+@keyframes vent-puff-anim {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  40% { opacity: 0.55; }
+  100% { opacity: 0; transform: translateY(-24px) scale(1.7); }
+}
+.vent-puff {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255,255,255,0.55), transparent 70%);
+  animation: vent-puff-anim 520ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vent-puff { animation-duration: 1ms; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Crew-facing UI kit (dark/spaceship — everything but admin)                 */
+/* -------------------------------------------------------------------------- */
+
+.panel-dark {
+  background: var(--color-space-panel);
+  border: 2px solid var(--color-space-line);
+  border-radius: 16px;
+}
+
+.panel-dark-raised {
+  background: var(--color-space-panel-raised);
+  border: 2px solid var(--color-space-line);
+  border-radius: 16px;
+}
+
+.crew-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-starlight-dim);
+}
+
+.crew-label-red {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-red);
+}
+
+/* Chunky, skeuomorphic "game menu" button — thick outline + drop ledge that
+   compresses on press, the Among Us menu-button feel without any copied art. */
+.btn-among {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  padding: 0.85rem 1.85rem;
+  color: var(--color-starlight);
+  background: var(--color-red);
+  border: 3px solid rgba(0, 0, 0, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.4), 0 10px 18px -6px rgba(0, 0, 0, 0.55);
+  transition: transform 100ms ease, box-shadow 100ms ease, filter 150ms ease;
+}
+.btn-among:hover:not(:disabled) { filter: brightness(1.1); }
+.btn-among:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4), 0 4px 10px -4px rgba(0, 0, 0, 0.5);
+}
+.btn-among:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-among-ghost {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.7rem 1.4rem;
+  color: var(--color-starlight);
+  background: var(--color-space-panel-raised);
+  border: 3px solid rgba(0, 0, 0, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+  transition: transform 100ms ease, box-shadow 100ms ease, filter 150ms ease;
+}
+.btn-among-ghost:hover:not(:disabled) { filter: brightness(1.2); }
+.btn-among-ghost:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); }
+.btn-among-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-icon-among {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-starlight-dim);
+  background: var(--color-space-panel-raised);
+  border: 2px solid var(--color-space-line);
+  border-radius: 10px;
+  padding: 0.45rem;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.btn-icon-among:hover { color: var(--color-red); border-color: var(--color-red); }
+
+.input-among {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: var(--color-space);
+  border: 2px solid var(--color-space-line);
+  border-radius: 10px;
+  color: var(--color-starlight);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.input-among::placeholder { color: var(--color-starlight-dim); }
+.input-among:focus { border-color: var(--color-red); }
+.input-among:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Task-list HUD, corner-anchored — the quintessential Among Us UI convention,
+   rebuilt generically (checkboxes + labels), not from any of their art. */
+.task-hud {
+  background: rgba(11, 13, 22, 0.82);
+  border: 2px solid var(--color-space-line);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  backdrop-filter: blur(8px);
+}
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-starlight-dim);
+}
+.task-item.is-current { color: var(--color-starlight); }
+.task-check {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 2px solid var(--color-starlight-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.task-check.is-done { background: var(--color-go); border-color: var(--color-go); }
+.task-check.is-current { border-color: var(--color-red); }
+
+/* Option "identity card" for quiz answers, dark variant. */
+.option-among {
+  position: relative;
+  text-align: left;
+  padding: 1rem 1.1rem;
+  background: var(--color-space-panel-raised);
+  border: 2px solid var(--color-space-line);
+  border-radius: 12px;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+.option-among:hover { border-color: var(--color-starlight-dim); }
+.option-among.is-selected {
+  border-color: var(--color-red);
+  background: var(--color-red-tint);
+  transform: translateX(3px);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase crossfade — used between question/matching/reveal states             */
+/* -------------------------------------------------------------------------- */
+
+.phase-fade-enter {
+  animation: phase-fade-in 380ms ease both;
+}
+@keyframes phase-fade-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase-fade-enter { animation: none; }
+}
+
+@keyframes matching-bounce-anim {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+.matching-bounce {
+  animation: matching-bounce-anim 0.9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .matching-bounce { animation: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Scrollbar                                                                   */
+/* -------------------------------------------------------------------------- */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--color-paper); }
+::-webkit-scrollbar-thumb { background: var(--color-ink-35); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-red); }
