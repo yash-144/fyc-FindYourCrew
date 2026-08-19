@@ -1,0 +1,114 @@
+'use client'
+
+import { useEffect, useState, useRef } from 'react'
+
+export function useRealtime(eventId: string, groupId?: string) {
+  const [messages, setMessages] = useState<any[]>([])
+  const [connected, setConnected] = useState(false)
+  const [participantCount, setParticipantCount] = useState(0)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const wsRef = useRef<WebSocket | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    let activeWs: WebSocket | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let retryDelay = 1000
+
+    const connect = async () => {
+      if (!mounted) return
+      try {
+        const res = await fetch('/api/realtime/auth')
+        if (!res.ok) return
+        const { token } = await res.json()
+        if (!mounted) return
+
+        const path = groupId ? `/ws/group/${groupId}` : `/ws/event/${eventId}`
+        const baseUrl = process.env.NEXT_PUBLIC_REALTIME_URL || 'wss://crew-match-realtime.goyalyash144.workers.dev'
+        const wsUrl = new URL(`${baseUrl}${path}`)
+        wsUrl.searchParams.set('eventId', eventId)
+        wsUrl.searchParams.set('token', token)
+
+        const ws = new WebSocket(wsUrl)
+        activeWs = ws
+        wsRef.current = ws
+
+        ws.onopen = () => {
+          console.log('[Realtime] Connected')
+          retryDelay = 1000 // reset backoff on success
+          if (mounted) setConnected(true)
+          ws.send(JSON.stringify({ type: 'join' }))
+        }
+
+        ws.onmessage = (event) => {
+          if (!mounted) return
+          try {
+            const data = JSON.parse(event.data)
+            if (data.type === 'chat_message') {
+              setMessages(prev => [...prev, data.payload])
+            } else if (data.type === 'participant_count') {
+              setParticipantCount(data.payload)
+            } else if (data.type === 'event_state_update') {
+              setRefreshTrigger(prev => prev + 1)
+            }
+          } catch (e) {
+            console.error('WebSocket parse error', e)
+          }
+        }
+
+        ws.onclose = (e) => {
+          console.log(`[Realtime] Disconnected (code=${e.code})`)
+          if (mounted) {
+            setConnected(false)
+            // Reconnect unless we closed it intentionally (code 1000)
+            if (e.code !== 1000) {
+              reconnectTimer = setTimeout(() => {
+                retryDelay = Math.min(retryDelay * 2, 30000)
+                connect()
+              }, retryDelay)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Realtime connect error', err)
+        if (mounted) {
+          reconnectTimer = setTimeout(() => {
+            retryDelay = Math.min(retryDelay * 2, 30000)
+            connect()
+          }, retryDelay)
+        }
+      }
+    }
+
+    // Ensure a clean close frame is sent when the tab is closed
+    const handleBeforeUnload = () => {
+      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+        activeWs.close(1000, 'Tab closed')
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    connect()
+
+    return () => {
+      mounted = false
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (activeWs) activeWs.close(1000, 'Component unmounted')
+    }
+  }, [eventId, groupId])
+
+  const broadcastChat = (message: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+       wsRef.current.send(JSON.stringify({ type: 'broadcast', payload: { type: 'chat_message', payload: message } }))
+    }
+  }
+
+  const broadcastEvent = (payload: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+       wsRef.current.send(JSON.stringify({ type: 'broadcast', payload }))
+    }
+  }
+
+  return { connected, messages, broadcastChat, broadcastEvent, participantCount, refreshTrigger }
+}

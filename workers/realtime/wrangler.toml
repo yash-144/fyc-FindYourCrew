@@ -1,0 +1,13 @@
+name = "crew-match-realtime"
+main = "src/index.ts"
+compatibility_date = "2024-02-23"
+
+[durable_objects]
+bindings = [
+  { name = "EVENT_ROOM", class_name = "EventRoom" },
+  { name = "GROUP_CHAT", class_name = "GroupChat" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["EventRoom", "GroupChat"]
