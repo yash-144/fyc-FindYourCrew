@@ -54,3 +54,4 @@ supabase/.temp/
 # actually deployed; this folder can contain unlicensed reference material
 # and should never be committed)
 /sprites/
+loadtest/.out/
