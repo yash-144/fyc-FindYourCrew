@@ -34,7 +34,7 @@ export default async function EventPage() {
   // didn't get matched, dead-end them on a bare "not in a group" page.
 
   return (
-    <main className="space-bg flex min-h-screen flex-col">
+    <main className="space-bg flex min-h-dvh flex-col">
       <CrewHeader eyebrow="Live Signal" title="Find Your Crew" id={user.id} name={fullName} email={user.email} />
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <EventClient eventId={participant.event_id} participantId={participant.id} />

@@ -36,7 +36,7 @@ export default async function Home() {
   }
 
   return (
-    <main className="space-bg relative flex min-h-screen flex-col items-center justify-center p-6 overflow-hidden">
+    <main className="space-bg relative flex min-h-dvh flex-col items-center justify-center p-6 overflow-hidden">
       {/* a few crewmates hanging around the hero, not perfectly arranged */}
       <div className="hidden sm:block absolute left-[8%] top-[22%] opacity-90" style={{ transform: 'rotate(-4deg)' }}>
         <CrewmateIcon color="cyan" size={64} />

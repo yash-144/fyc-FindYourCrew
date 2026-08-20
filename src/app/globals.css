@@ -543,6 +543,18 @@ body {
   .phase-fade-enter { animation: none; }
 }
 
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.6); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.countdown-pop {
+  animation: countdown-pop 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .countdown-pop { animation: none; }
+}
+
 @keyframes matching-bounce-anim {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-14px); }

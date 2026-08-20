@@ -21,7 +21,7 @@ export default async function AdminPage() {
 
   if (!activeEvent) {
     return (
-      <main className="min-h-screen flex flex-col">
+      <main className="min-h-dvh flex flex-col">
         <AppHeader eyebrow="Mission Control" title="Admin" id={user.id} name={fullName} email={user.email} />
         <div className="flex-1 flex items-center justify-center p-6 text-center">
           <div className="field-card p-8 space-y-4">
@@ -46,7 +46,7 @@ export default async function AdminPage() {
     .order('position', { ascending: true })
 
   return (
-    <main className="min-h-screen flex flex-col">
+    <main className="min-h-dvh flex flex-col">
       <AppHeader eyebrow="Mission Control" title="Admin" id={user.id} name={fullName} email={user.email}>
         <span className="font-mono text-xs text-ink-60 hidden md:inline">{activeEvent.name}</span>
       </AppHeader>

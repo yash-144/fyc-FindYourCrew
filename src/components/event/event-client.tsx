@@ -1,37 +1,43 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check } from 'lucide-react'
 import { submitResponse } from '@/server/answer-actions'
 import { useRealtime } from '@/hooks/use-realtime'
 import { CrewmateIcon } from '@/components/ui/crewmate-icon'
 import { PhaseFade } from '@/components/ui/phase-fade'
+import { GameBeginTransition } from '@/components/event/game-begin-transition'
 import { CREW_COLORS } from '@/lib/crew-color'
 
 // Seconds of "3.. 2.. 1.." shown before a question's own answer timer starts
 // counting down — purely a client-side beat, no server state needed for it.
 const REVEAL_COUNTDOWN_SECONDS = 3
 
+// Deliberately in normal document flow, never `fixed` — a floating corner
+// HUD was overlapping the centered question content on narrower screens
+// (this app is mobile-first, so "narrower" is the common case, not the
+// edge case). Sitting inline above the phase content instead means it can
+// never overlap anything, on any viewport, at the cost of a little vertical
+// space that a slim strip barely notices.
 function TaskHud({ total, current }: { total: number; current: number }) {
   if (total <= 0) return null
   return (
-    <div className="task-hud fixed top-20 left-4 sm:left-6 z-20 w-40">
-      <div className="crew-label mb-2">Tasks</div>
-      <div className="space-y-1.5">
+    <div className="task-hud flex items-center justify-center gap-3 mb-4 px-4 py-2.5 w-full max-w-md mx-auto">
+      <div className="flex items-center gap-1.5 flex-1 justify-center">
         {Array.from({ length: total }, (_, i) => i + 1).map((n) => {
           const done = n < current
           const isCurrent = n === current
           return (
-            <div key={n} className={`task-item ${isCurrent ? 'is-current' : ''}`}>
-              <span className={`task-check ${done ? 'is-done' : ''} ${isCurrent ? 'is-current' : ''}`}>
-                {done && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-              </span>
-              Task {n.toString().padStart(2, '0')}
-            </div>
+            <span
+              key={n}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                isCurrent ? 'w-6 bg-red' : done ? 'w-2.5 bg-go' : 'w-2.5 bg-space-line'
+              }`}
+            />
           )
         })}
       </div>
+      <span className="crew-label whitespace-nowrap">Task {current}/{total}</span>
     </div>
   )
 }
@@ -145,12 +151,26 @@ export function EventClient({ eventId, participantId }: { eventId: string, parti
     await submitResponse(eventId, eventState.active_question_id, optionId).catch(console.error)
   }
 
+  // Plays once — the moment this participant's resolved status is first
+  // PRE_GAME, whether that's from arriving fresh off the lobby redirect or
+  // a reload that landed mid-PRE_GAME. Never replays on a later broadcast
+  // that happens to still report PRE_GAME.
+  const playedBeginIntroRef = useRef(false)
+  const [playBeginIntro, setPlayBeginIntro] = useState(false)
+  useEffect(() => {
+    if (eventState?.status === 'PRE_GAME' && !playedBeginIntroRef.current) {
+      playedBeginIntroRef.current = true
+      setPlayBeginIntro(true)
+    }
+  }, [eventState?.status])
+
   const phaseKey = `${eventState?.status ?? 'loading'}-${eventState?.active_question_id ?? ''}-${timesUp}-${matchResult?.matched ?? ''}`
   const showHud = totalQuestions > 0 && currentPosition !== null &&
     ['QUESTION_INTRO', 'QUESTION_ACTIVE', 'QUESTION_LOCKED'].includes(eventState?.status)
 
   return (
     <>
+      <GameBeginTransition active={playBeginIntro} />
       {showHud && <TaskHud total={totalQuestions} current={currentPosition!} />}
       <PhaseFade phaseKey={phaseKey}>
         <EventPhase
@@ -191,7 +211,11 @@ function EventPhase({
   onEnterChat: () => void
 }) {
   if (!eventState) {
-    return <div className="crew-label">Syncing...</div>
+    // Blank rather than a "Syncing..." label — the page's own dark space-bg
+    // is already showing, and the brief gap before the mount fetch resolves
+    // (most visibly right after the lobby -> event navigation, just before
+    // PRE_GAME's blackout takes over) shouldn't flash text at all.
+    return null
   }
 
   if (eventState.status === 'PRE_GAME') {
@@ -228,7 +252,13 @@ function EventPhase({
       return (
         <div className="text-center space-y-2">
           <div className="crew-label">Task {String(questionData.position).padStart(2, '0')} starts in</div>
-          <div className="font-display font-black text-8xl text-red tabular-nums">{countdownLeft}</div>
+          {/* key={countdownLeft} replays the pop only when the number actually
+              changes (the interval driving it ticks every 200ms, far more often
+              than the displayed value does) — that's what makes 3 -> 2 -> 1 read
+              as a smooth beat instead of an abrupt swap. */}
+          <div key={countdownLeft} className="countdown-pop font-display font-black text-8xl text-red tabular-nums">
+            {countdownLeft}
+          </div>
         </div>
       )
     }
@@ -251,9 +281,22 @@ function EventPhase({
             00:{timeLeft.toString().padStart(2, '0')}
           </div>
         </div>
-        <div className="panel-dark p-6 space-y-6">
-          <p className="font-display font-semibold text-xl leading-snug text-starlight">{questionData.body}</p>
-          <div className="space-y-3">
+        {/* Fixed size regardless of how long this particular question's text
+            or option list is — a question box that grows/shrinks per question
+            makes the layout jump around between tasks. Each region scrolls
+            internally instead of resizing the box for an unusually long
+            question or an unusually long option list. */}
+        <div className="panel-dark p-6 flex flex-col gap-4 h-[60vh] min-h-[360px] max-h-[520px]">
+          <div className="relative shrink-0 max-h-[42%]">
+            <p className="font-display font-semibold text-xl leading-snug text-starlight overflow-y-auto max-h-full pb-2">
+              {questionData.body}
+            </p>
+            {/* Scroll affordance — an unusually long question is capped and
+                scrolls rather than growing the box, but a hard clip with no
+                visual cue reads as broken/truncated rather than scrollable. */}
+            <div className="pointer-events-none absolute bottom-0 inset-x-0 h-5 bg-gradient-to-t from-space-panel to-transparent" />
+          </div>
+          <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
             {questionData.options.map((opt: any, i: number) => (
               <button
                 key={opt.id}

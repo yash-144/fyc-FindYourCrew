@@ -36,7 +36,7 @@ export default async function ChatPage() {
 
   if (!groupMember) {
     return (
-      <main className="space-bg flex min-h-screen flex-col">
+      <main className="space-bg flex min-h-dvh flex-col">
         <CrewHeader eyebrow="Crew Chat" title="Find Your Crew" id={user.id} name={fullName} email={user.email} />
         <div className="flex-1 flex items-center justify-center p-6 text-center">
           <div className="panel-dark p-6">

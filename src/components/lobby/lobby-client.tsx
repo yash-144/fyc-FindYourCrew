@@ -277,7 +277,7 @@ export function LobbyClient({
   }, [eventUpdate, router])
 
   return (
-    <div className="crew-room relative flex-1 flex flex-col min-h-screen overflow-hidden">
+    <div className="crew-room relative flex-1 flex flex-col min-h-dvh overflow-hidden">
       {/* minimal corner chrome — the scene is the UI */}
       <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between px-4 sm:px-6 py-4">
         <div className="font-mono text-[0.65rem] tracking-[0.2em] uppercase text-white/50">

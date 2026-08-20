@@ -27,7 +27,7 @@ export default async function ProfilePage() {
 
   if (!activeEvent) {
     return (
-      <main className="space-bg flex min-h-screen flex-col">
+      <main className="space-bg flex min-h-dvh flex-col">
         <CrewHeader eyebrow="Status: Idle" title="Find Your Crew" id={user.id} name={fullName} email={user.email} />
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="crew-label-red mb-2">No Signal</div>
@@ -52,7 +52,7 @@ export default async function ProfilePage() {
   const color = crewColorForId(user.id)
 
   return (
-    <main className="space-bg flex min-h-screen flex-col">
+    <main className="space-bg flex min-h-dvh flex-col">
       <CrewHeader eyebrow="Crew Prep" title="Find Your Crew" id={user.id} name={fullName} email={user.email} />
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-6">
