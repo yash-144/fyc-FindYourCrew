@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { updateEventStatus, updateQuestionStatus, createQuestion, updateQuestion, deleteQuestion, reorderQuestions } from '@/server/event-actions'
-import { Plus, Trash2, Edit2, Play, CheckCircle, Save, X, ChevronUp, ChevronDown, Circle } from 'lucide-react'
+import { updateEventStatus, updateQuestionStatus, createQuestion, updateQuestion, deleteQuestion, reorderQuestions, getResetPreview, resetEventData } from '@/server/event-actions'
+import { Plus, Trash2, Edit2, Play, CheckCircle, Save, X, ChevronUp, ChevronDown, Circle, AlertTriangle, Skull } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
 
 type Tab = 'controls' | 'questions'
@@ -34,6 +34,11 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
 
   // Question CRUD State
   const [editingQuestion, setEditingQuestion] = useState<any | null>(null)
+
+  // Reset ("kill button") state
+  const [resetModalOpen, setResetModalOpen] = useState(false)
+  const [resetPreview, setResetPreview] = useState<{ participants: number; responses: number; groups: number; chatMessages: number } | null>(null)
+  const [resetPreviewLoading, setResetPreviewLoading] = useState(false)
 
   // Every mutating action shares the same shape: show loading, clear any
   // previous error, run the mutation, tell other clients what changed, and
@@ -178,6 +183,28 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
     runAction(() => reorderQuestions(eventId, newOrder.map(q => q.id)))
   }
 
+  const openResetModal = async () => {
+    setResetModalOpen(true)
+    setResetPreviewLoading(true)
+    setResetPreview(null)
+    try {
+      const preview = await getResetPreview(eventId)
+      setResetPreview(preview)
+    } catch (err) {
+      setAdminError(err instanceof Error ? err.message : 'Could not load reset preview')
+      setResetModalOpen(false)
+    } finally {
+      setResetPreviewLoading(false)
+    }
+  }
+
+  const handleConfirmReset = () =>
+    runAction(async () => {
+      const result = await resetEventData(eventId)
+      setResetModalOpen(false)
+      return result
+    })
+
   const startEditQuestion = (q: any) => {
     const sortedOptions = [...(q.options || [])].sort((a, b) => a.option_key.localeCompare(b.option_key))
     // Pad with empty options if fewer than 4
@@ -280,6 +307,78 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
                 </button>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'controls' && (
+        <div className="field-card-danger p-5 sm:p-8">
+          <div className="flex items-start gap-3 mb-4">
+            <AlertTriangle className="w-5 h-5 text-red shrink-0 mt-0.5" />
+            <div>
+              <h2 className="font-display font-bold text-lg text-ink">Danger Zone</h2>
+              <p className="text-ink-60 text-sm mt-1">
+                Wipes everyone&rsquo;s join, answers, matches, and chat for this event so it starts
+                clean for a real run. Questions/tasks you&rsquo;ve authored are kept.
+              </p>
+            </div>
+          </div>
+          <button
+            disabled={loading}
+            onClick={openResetModal}
+            className="btn-danger-outline px-5 py-2.5"
+          >
+            <Skull className="w-4 h-4" />
+            Reset Event Data
+          </button>
+        </div>
+      )}
+
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="field-card max-w-sm w-full p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-red shrink-0" />
+              <div>
+                <h3 className="font-display font-bold text-lg text-ink">Reset this event?</h3>
+                <p className="text-ink-60 text-sm mt-1">This permanently deletes, and cannot be undone:</p>
+              </div>
+            </div>
+
+            {resetPreviewLoading ? (
+              <p className="font-mono text-xs text-ink-60">Counting what&rsquo;s there...</p>
+            ) : resetPreview ? (
+              <ul className="font-mono text-sm text-ink space-y-1.5 pl-1">
+                <li>• {resetPreview.participants} participant{resetPreview.participants === 1 ? '' : 's'}</li>
+                <li>• {resetPreview.responses} response{resetPreview.responses === 1 ? '' : 's'}</li>
+                <li>• {resetPreview.groups} matched group{resetPreview.groups === 1 ? '' : 's'}</li>
+                <li>• {resetPreview.chatMessages} chat message{resetPreview.chatMessages === 1 ? '' : 's'}</li>
+              </ul>
+            ) : null}
+
+            <p className="text-ink-60 text-sm">
+              The event resets to <span className="font-mono text-red">LOBBY</span>. Questions/tasks are kept.
+            </p>
+
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => setResetModalOpen(false)}
+                className="btn-ghost px-6 py-2.5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={loading || resetPreviewLoading}
+                onClick={handleConfirmReset}
+                className="btn-danger px-6 py-2.5"
+              >
+                <Skull className="w-4 h-4" />
+                {loading ? 'Resetting...' : 'Yes, Reset Everything'}
+              </button>
+            </div>
           </div>
         </div>
       )}

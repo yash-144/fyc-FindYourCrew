@@ -120,6 +120,72 @@ export async function updateQuestionStatus(eventId: string, questionId: string |
   return eventState
 }
 
+// --- Reset ("kill button") ---
+//
+// Before a real run, an admin who's been iterating/testing the same event
+// wants everyone's join/answers/matches/chat wiped so it starts clean — this
+// is exactly the class of bug this session kept hitting (stale participants
+// still showing in the lobby, a stale group colliding with a fresh matching
+// run). Deliberately does NOT touch questions/question_options — those are
+// authored setup, not run data, and an admin who just wrote a quiz shouldn't
+// lose it to a "clean slate" click. Cascades handle the rest: deleting
+// event_participants cascades responses; deleting groups cascades
+// group_members/chat_messages/chat_reports.
+
+export async function getResetPreview(eventId: string) {
+  await requireAdmin()
+  const supabase = createServiceRoleClient()
+
+  const [participants, responses, groups, chatMessages] = await Promise.all([
+    supabase.from('event_participants').select('id', { count: 'exact', head: true }).eq('event_id', eventId),
+    supabase.from('responses').select('id', { count: 'exact', head: true }).eq('event_id', eventId),
+    supabase.from('groups').select('id', { count: 'exact', head: true }).eq('event_id', eventId),
+    supabase.from('chat_messages').select('id', { count: 'exact', head: true }).eq('event_id', eventId),
+  ])
+
+  return {
+    participants: participants.count || 0,
+    responses: responses.count || 0,
+    groups: groups.count || 0,
+    chatMessages: chatMessages.count || 0,
+  }
+}
+
+export async function resetEventData(eventId: string) {
+  await requireAdmin()
+  const supabase = createServiceRoleClient()
+
+  // groups first — its cascade takes group_members/chat_messages/chat_reports
+  // with it. event_participants next — its cascade takes responses with it.
+  await supabase.from('groups').delete().eq('event_id', eventId)
+  await supabase.from('event_participants').delete().eq('event_id', eventId)
+  // Dead tables from the removed metric-reveal feature — cleared defensively
+  // in case any rows survive from before that feature was removed.
+  await supabase.from('question_metrics').delete().eq('event_id', eventId)
+  await supabase.from('live_reaction_counts').delete().eq('event_id', eventId)
+
+  await supabase.from('events').update({ status: 'LOBBY', started_at: null, ended_at: null }).eq('id', eventId)
+  const { data: eventState } = await supabase
+    .from('event_state')
+    .update({
+      status: 'LOBBY',
+      active_question_id: null,
+      question_index: null,
+      timer_started_at: null,
+      timer_duration_seconds: null,
+      timer_paused_at: null,
+      timer_remaining_seconds: null,
+      metric_id: null,
+    })
+    .eq('event_id', eventId)
+    .select()
+    .single()
+
+  revalidatePath('/admin')
+  refresh()
+  return eventState
+}
+
 // --- Question Management CRUD ---
 
 export async function createQuestion(

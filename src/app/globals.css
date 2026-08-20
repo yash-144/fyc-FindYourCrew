@@ -182,6 +182,74 @@ body {
   cursor: not-allowed;
 }
 
+/* Destructive-action variants — outline (opens a confirmation) and solid
+   (the actual irreversible action inside that confirmation). Dedicated
+   classes rather than composing Tailwind's `border-red`/`hover:bg-red`
+   utilities on top of .field-card/.btn-secondary: those are unlayered
+   custom CSS declared after Tailwind's own `@import`, which beats anything
+   in Tailwind's utilities layer regardless of class order — the override
+   silently never applied when tried that way. */
+.field-card-danger {
+  background: var(--color-card);
+  border: 1.5px solid var(--color-red);
+  border-radius: 14px;
+}
+
+.btn-danger-outline {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.7rem 1.25rem;
+  color: var(--color-red);
+  background: transparent;
+  border: 1.5px solid var(--color-red);
+  border-radius: 10px;
+  transition: background-color 150ms ease, color 150ms ease, transform 120ms ease;
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--color-red);
+  color: var(--color-paper);
+}
+.btn-danger-outline:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-danger-outline:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  padding: 0.85rem 1.5rem;
+  color: var(--color-paper);
+  background: var(--color-red);
+  border: 1.5px solid var(--color-red);
+  border-radius: 10px;
+  transition: transform 120ms ease, filter 150ms ease;
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.btn-danger:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-danger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .btn-ghost {
   display: inline-flex;
   align-items: center;
