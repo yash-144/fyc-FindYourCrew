@@ -18,6 +18,13 @@ export function useRealtime(eventId: string, groupId?: string, identity?: Realti
   const [participantCount, setParticipantCount] = useState(0)
   const [roster, setRoster] = useState<RosterEntry[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  // Carries the actual new event_state (and, when relevant, question) the
+  // admin pushed alongside the broadcast — lets clients apply it directly
+  // instead of every connected participant reacting to the same broadcast
+  // by independently calling /api/event-state at once. `refreshTrigger`
+  // stays as a plain "something changed" pulse for anything that still
+  // wants to re-fetch rather than consume the pushed payload.
+  const [eventUpdate, setEventUpdate] = useState<{ eventState: any; questionData: any } | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
 
   // Identity can arrive a tick after eventId/groupId (it's derived from a
@@ -85,6 +92,9 @@ export function useRealtime(eventId: string, groupId?: string, identity?: Realti
               setRoster(data.payload)
             } else if (data.type === 'event_state_update') {
               setRefreshTrigger(prev => prev + 1)
+              if (data.eventState) {
+                setEventUpdate({ eventState: data.eventState, questionData: data.questionData ?? null })
+              }
             }
           } catch (e) {
             console.error('WebSocket parse error', e)
@@ -150,5 +160,5 @@ export function useRealtime(eventId: string, groupId?: string, identity?: Realti
     }
   }
 
-  return { connected, messages, broadcastChat, broadcastEvent, participantCount, roster, refreshTrigger }
+  return { connected, messages, broadcastChat, broadcastEvent, participantCount, roster, refreshTrigger, eventUpdate }
 }

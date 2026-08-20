@@ -48,7 +48,7 @@ export function EventClient({ eventId, participantId }: { eventId: string, parti
   const [currentPosition, setCurrentPosition] = useState<number | null>(null)
   const [matchResult, setMatchResult] = useState<{ matched: boolean } | null>(null)
 
-  const { refreshTrigger } = useRealtime(eventId)
+  const { eventUpdate } = useRealtime(eventId)
 
   useEffect(() => {
     fetch(`/api/questions-meta?eventId=${eventId}`, { cache: 'no-store' })
@@ -57,32 +57,45 @@ export function EventClient({ eventId, participantId }: { eventId: string, parti
       .catch(() => {})
   }, [eventId])
 
+  // One fetch on mount for whatever's already in progress (first load, or a
+  // reload/reconnect that missed broadcasts while away) — including the
+  // active question itself, if one's already underway. Every subsequent
+  // state change arrives pushed over the WebSocket instead — see the effect
+  // below — so this deliberately does NOT depend on anything that would
+  // re-run it per broadcast.
   useEffect(() => {
-    const fetchState = async () => {
-      try {
-        const res = await fetch(`/api/event-state?eventId=${eventId}`, { cache: 'no-store' })
-        if (res.ok) {
-          const data = await res.json()
-          setEventState(data)
+    let cancelled = false
+    fetch(`/api/event-state?eventId=${eventId}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setEventState(data)
+        if ((data.status === 'QUESTION_INTRO' || data.status === 'QUESTION_ACTIVE') && data.active_question_id) {
+          return fetch(`/api/question?id=${data.active_question_id}`, { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((q) => { if (!cancelled && q) { setQuestionData(q); setCurrentPosition(q.position) } })
         }
-      } catch (err) {
-        console.error("Fetch state error", err)
-      }
-    }
+      })
+      .catch((err) => console.error('Fetch state error', err))
+    return () => { cancelled = true }
+  }, [eventId])
 
-    fetchState()
-  }, [eventId, refreshTrigger])
-
+  // The admin already has the new event_state (and, during a question
+  // phase, the question itself) the moment their click succeeds, and pushes
+  // both in the broadcast — so every connected participant can apply the
+  // update directly instead of every one of them independently calling
+  // /api/event-state and /api/question the instant they see the broadcast.
   useEffect(() => {
-    if ((eventState?.status === 'QUESTION_INTRO' || eventState?.status === 'QUESTION_ACTIVE') && eventState.active_question_id) {
-       fetch(`/api/question?id=${eventState.active_question_id}`, { cache: 'no-store' })
-         .then(r => r.json())
-         .then((q) => { setQuestionData(q); setCurrentPosition(q.position) })
+    if (!eventUpdate) return
+    setEventState(eventUpdate.eventState)
+    if (eventUpdate.questionData) {
+      setQuestionData(eventUpdate.questionData)
+      setCurrentPosition(eventUpdate.questionData.position)
     } else {
-       setQuestionData(null)
-       setSelectedOption(null)
+      setQuestionData(null)
+      setSelectedOption(null)
     }
-  }, [eventState?.status, eventState?.active_question_id])
+  }, [eventUpdate])
 
   // The reveal countdown, the answer timer, and the auto "time's up" beat are
   // all derived from the one server timestamp — nothing here is server

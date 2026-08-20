@@ -74,7 +74,7 @@ export function LobbyClient({
 }) {
   const router = useRouter()
   const identity = useRef({ participantId: selfParticipantId, name: selfName || 'Crewmate' }).current
-  const { refreshTrigger, roster } = useRealtime(eventId, undefined, identity)
+  const { roster, eventUpdate } = useRealtime(eventId, undefined, identity)
 
   const [seats, setSeats] = useState<Seat[]>([])
   const [overflow, setOverflow] = useState(0)
@@ -263,20 +263,18 @@ export function LobbyClient({
     setTotalCount(roster.length)
   }, [roster, processQueue])
 
+  // The admin's broadcast already carries the new status — no need to ask
+  // /api/event-state for it separately (that's the exact fetch-storm this
+  // page used to trigger on every single connected participant at once).
   useEffect(() => {
-    if (refreshTrigger === 0) return
-    fetch(`/api/event-state?eventId=${eventId}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((state: { status?: string } | null) => {
-        if (!state?.status || LOBBY_STATUSES.has(state.status)) return
-        if (state.status === 'GROUP_CHAT_OPEN') {
-          router.push('/chat')
-        } else {
-          router.push('/event')
-        }
-      })
-      .catch(console.error)
-  }, [refreshTrigger, eventId, router])
+    const status = eventUpdate?.eventState?.status
+    if (!status || LOBBY_STATUSES.has(status)) return
+    if (status === 'GROUP_CHAT_OPEN') {
+      router.push('/chat')
+    } else {
+      router.push('/event')
+    }
+  }, [eventUpdate, router])
 
   return (
     <div className="crew-room relative flex-1 flex flex-col min-h-screen overflow-hidden">

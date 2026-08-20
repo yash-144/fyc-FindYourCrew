@@ -59,6 +59,11 @@ export async function createEvent(name: string) {
   return data
 }
 
+// Returns the updated event_state row so the caller can broadcast it
+// directly over the realtime worker — every connected participant reacts to
+// that one broadcast by hitting /api/event-state simultaneously (see
+// use-realtime.ts), so pushing the actual row avoids turning one admin click
+// into hundreds of synchronized HTTP requests.
 export async function updateEventStatus(eventId: string, status: string) {
   await requireAdmin()
   const supabase = createServiceRoleClient()
@@ -69,10 +74,11 @@ export async function updateEventStatus(eventId: string, status: string) {
   }
 
   await supabase.from('events').update({ status }).eq('id', eventId)
-  await supabase.from('event_state').update({ status }).eq('event_id', eventId)
-  
+  const { data: eventState } = await supabase.from('event_state').update({ status }).eq('event_id', eventId).select().single()
+
   revalidatePath('/admin')
   refresh()
+  return eventState
 }
 
 export async function updateQuestionStatus(eventId: string, questionId: string | null, status: string, durationSeconds?: number) {
@@ -107,10 +113,11 @@ export async function updateQuestionStatus(eventId: string, questionId: string |
     stateUpdate.timer_started_at = new Date().toISOString()
   }
 
-  await supabase.from('event_state').update(stateUpdate).eq('event_id', eventId)
-  
+  const { data: eventState } = await supabase.from('event_state').update(stateUpdate).eq('event_id', eventId).select().single()
+
   revalidatePath('/admin')
   refresh()
+  return eventState
 }
 
 // --- Question Management CRUD ---

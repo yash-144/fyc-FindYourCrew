@@ -36,16 +36,30 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
   const [editingQuestion, setEditingQuestion] = useState<any | null>(null)
 
   // Every mutating action shares the same shape: show loading, clear any
-  // previous error, run the mutation, tell other clients to refetch, and
+  // previous error, run the mutation, tell other clients what changed, and
   // surface whatever went wrong instead of failing silently. Previously
   // handleStateChange/handleAdvanceEvent duplicated this by hand and the
   // question CRUD handlers skipped error handling entirely.
-  const runAction = async (fn: () => Promise<void>) => {
+  //
+  // When `fn` returns the updated event_state row (updateEventStatus/
+  // updateQuestionStatus both do), the broadcast carries it directly —
+  // otherwise every one of N connected participants reacts to the same
+  // broadcast by independently calling /api/event-state (and often
+  // /api/question right after) at once, turning one admin click into a
+  // synchronized burst of HTTP requests. Pushing the row lets clients apply
+  // it straight from the WebSocket message instead.
+  const runAction = async (fn: () => Promise<any>) => {
     setLoading(true)
     setAdminError(null)
     try {
-      await fn()
-      broadcastEvent({ type: 'event_state_update' })
+      const result = await fn()
+      if (result?.status) {
+        const needsQuestion = QUESTION_STATUSES.includes(result.status) && result.status !== 'QUESTION_LOCKED'
+        const questionData = needsQuestion ? questions.find(q => q.id === result.active_question_id) ?? null : null
+        broadcastEvent({ type: 'event_state_update', eventState: result, questionData })
+      } else {
+        broadcastEvent({ type: 'event_state_update' })
+      }
     } catch (err) {
       setAdminError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
@@ -104,7 +118,7 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
       }
 
       if (nextStatus) {
-        await applyStatus(nextStatus, extraArgs)
+        return await applyStatus(nextStatus, extraArgs)
       }
     })
 
