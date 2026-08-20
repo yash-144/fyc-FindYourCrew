@@ -339,7 +339,7 @@ export function LobbyClient({
           {totalCount} <span className="text-red">CREW</span>
         </div>
         <div className="font-mono text-[0.7rem] tracking-[0.2em] uppercase text-white/50">
-          Waiting for the admin to start the event...
+          Hang tight — we&rsquo;ll jump in the moment it starts.
         </div>
       </div>
     </div>
