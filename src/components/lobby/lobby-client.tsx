@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
-import { useRealtime } from '@/hooks/use-realtime'
+import { useRealtime, type RosterEntry } from '@/hooks/use-realtime'
 import { signOut } from '@/app/auth/actions'
 import { ColorBag, Crewmate, seeded, type CrewColor } from './crewmate'
 import { Vent } from './vent'
 
 const LOBBY_STATUSES = new Set(['SETUP', 'LOBBY', 'COUNTDOWN'])
 const MAX_VISIBLE = 14
-const POLL_MS = 3000
 const QUEUE_STAGGER_MS = 550
 
 // Hand-placed organic cluster — deliberately not a grid or a perfect circle.
@@ -42,12 +41,6 @@ const POS_DAMPING = 12
 const SCALE_STIFFNESS = 120
 const SCALE_DAMPING = 14
 
-interface RosterEntry {
-  participantId: string
-  name: string
-  department: string
-}
-
 interface Seat extends RosterEntry {
   slot: number
   color: CrewColor
@@ -70,15 +63,18 @@ interface Physics {
 
 export function LobbyClient({
   eventId,
+  selfParticipantId,
   selfName,
   selfAvatarUrl,
 }: {
   eventId: string
+  selfParticipantId: string
   selfName?: string | null
   selfAvatarUrl?: string | null
 }) {
   const router = useRouter()
-  const { refreshTrigger } = useRealtime(eventId)
+  const identity = useRef({ participantId: selfParticipantId, name: selfName || 'Crewmate' }).current
+  const { refreshTrigger, roster } = useRealtime(eventId, undefined, identity)
 
   const [seats, setSeats] = useState<Seat[]>([])
   const [overflow, setOverflow] = useState(0)
@@ -195,7 +191,10 @@ export function LobbyClient({
     if (!next) return
     const slot = nextFreeSlot()
     if (slot === null) {
-      setOverflow((n) => n + 1)
+      // Shouldn't happen — the roster effect only queues as many arrivals as
+      // there's capacity for — but stay defensive rather than seat past
+      // MAX_VISIBLE. Overflow count itself is owned (and recomputed fresh)
+      // by that effect, not incremented here.
       return
     }
     processingRef.current = true
@@ -226,34 +225,43 @@ export function LobbyClient({
     }, QUEUE_STAGGER_MS)
   }, [nextFreeSlot])
 
-  const fetchRoster = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/lobby-roster?eventId=${eventId}`, { cache: 'no-store' })
-      if (!res.ok) return
-      const { roster } = (await res.json()) as { roster: RosterEntry[] }
-      setTotalCount(roster.length)
-
-      const fresh = roster.filter((r) => !knownIds.current.has(r.participantId))
-      if (fresh.length === 0) return
-      for (const r of fresh) knownIds.current.add(r.participantId)
-
-      const capacityLeft = MAX_VISIBLE - usedSlots.current.size - queueRef.current.length
-      const toSeat = fresh.slice(0, Math.max(0, capacityLeft))
-      const toOverflow = fresh.length - toSeat.length
-      if (toOverflow > 0) setOverflow((n) => n + toOverflow)
-
-      queueRef.current.push(...toSeat)
-      processQueue()
-    } catch (err) {
-      console.error('lobby roster fetch error', err)
-    }
-  }, [eventId, processQueue])
-
+  // Driven by the realtime worker's live roster (who is actually connected
+  // right now), not a poll of permanent DB membership — so someone who
+  // joined and later dropped off (idle-swept, closed the tab, network drop)
+  // disappears from the scene instead of lingering there forever.
   useEffect(() => {
-    fetchRoster()
-    const interval = window.setInterval(fetchRoster, POLL_MS)
-    return () => window.clearInterval(interval)
-  }, [fetchRoster])
+    const freshIds = new Set(roster.map((r) => r.participantId))
+
+    // Departures — free the slot/physics/DOM state for anyone no longer live.
+    setSeats((prev) => {
+      const remaining = prev.filter((s) => freshIds.has(s.participantId))
+      if (remaining.length === prev.length) return prev
+      for (const s of prev) {
+        if (!freshIds.has(s.participantId)) {
+          usedSlots.current.delete(s.slot)
+          physicsRef.current.delete(s.participantId)
+          crewElsRef.current.delete(s.participantId)
+        }
+      }
+      return remaining
+    })
+    for (const id of knownIds.current) {
+      if (!freshIds.has(id)) knownIds.current.delete(id)
+    }
+    queueRef.current = queueRef.current.filter((r) => freshIds.has(r.participantId))
+
+    // Arrivals — anyone new gets queued for the vent-emergence animation.
+    const arrivals = roster.filter((r) => !knownIds.current.has(r.participantId))
+    for (const r of arrivals) knownIds.current.add(r.participantId)
+    if (arrivals.length > 0) {
+      const capacityLeft = Math.max(0, MAX_VISIBLE - usedSlots.current.size - queueRef.current.length)
+      queueRef.current.push(...arrivals.slice(0, capacityLeft))
+      processQueue()
+    }
+
+    setOverflow(Math.max(0, roster.length - usedSlots.current.size - queueRef.current.length))
+    setTotalCount(roster.length)
+  }, [roster, processQueue])
 
   useEffect(() => {
     if (refreshTrigger === 0) return

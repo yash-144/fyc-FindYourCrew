@@ -2,12 +2,31 @@
 
 import { useEffect, useState, useRef } from 'react'
 
-export function useRealtime(eventId: string, groupId?: string) {
+export interface RosterEntry {
+  participantId: string
+  name: string
+}
+
+export interface RealtimeIdentity {
+  participantId: string
+  name: string
+}
+
+export function useRealtime(eventId: string, groupId?: string, identity?: RealtimeIdentity) {
   const [messages, setMessages] = useState<any[]>([])
   const [connected, setConnected] = useState(false)
   const [participantCount, setParticipantCount] = useState(0)
+  const [roster, setRoster] = useState<RosterEntry[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
+
+  // Identity can arrive a tick after eventId/groupId (it's derived from a
+  // participant row fetched by the parent). Keep a ref so the reconnect
+  // effect below doesn't need identity in its dependency array — that would
+  // tear down and reopen the socket every time the identity object's
+  // reference changes, even when its contents didn't.
+  const identityRef = useRef(identity)
+  identityRef.current = identity
 
   useEffect(() => {
     let mounted = true
@@ -43,7 +62,8 @@ export function useRealtime(eventId: string, groupId?: string) {
           console.log('[Realtime] Connected')
           retryDelay = 1000 // reset backoff on success
           if (mounted) setConnected(true)
-          ws.send(JSON.stringify({ type: 'join' }))
+          const id = identityRef.current
+          ws.send(JSON.stringify(id ? { type: 'join', participantId: id.participantId, name: id.name } : { type: 'join' }))
 
           if (pingInterval) clearInterval(pingInterval)
           pingInterval = setInterval(() => {
@@ -61,6 +81,8 @@ export function useRealtime(eventId: string, groupId?: string) {
               setMessages(prev => [...prev, data.payload])
             } else if (data.type === 'participant_count') {
               setParticipantCount(data.payload)
+            } else if (data.type === 'roster') {
+              setRoster(data.payload)
             } else if (data.type === 'event_state_update') {
               setRefreshTrigger(prev => prev + 1)
             }
@@ -128,5 +150,5 @@ export function useRealtime(eventId: string, groupId?: string) {
     }
   }
 
-  return { connected, messages, broadcastChat, broadcastEvent, participantCount, refreshTrigger }
+  return { connected, messages, broadcastChat, broadcastEvent, participantCount, roster, refreshTrigger }
 }

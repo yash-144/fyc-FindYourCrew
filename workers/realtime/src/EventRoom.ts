@@ -5,6 +5,12 @@
 // participant count — lingers forever. The client pings periodically; anything
 // that goes quiet longer than STALE_TIMEOUT_MS gets swept and force-closed on
 // a recurring alarm, which only stays armed while at least one socket is open.
+//
+// Every socket also carries the participant's identity (attached on `join`),
+// so this room can broadcast an actual live roster — not just a count. That's
+// what the lobby's crew-assembly scene is driven by: participants who leave
+// (idle-swept or genuinely disconnected) drop out of the next broadcast, so
+// the lobby stops showing people who joined in a past session and left.
 
 const STALE_TIMEOUT_MS = 75_000; // ~3 missed client pings (client pings every 25s)
 const SWEEP_INTERVAL_MS = 30_000;
@@ -12,6 +18,14 @@ const IDLE_TIMEOUT_CLOSE_CODE = 4000; // not 1000 — the client should reconnec
 
 interface Attachment {
   lastSeen: number;
+  firstSeen: number;
+  participantId?: string;
+  name?: string;
+}
+
+interface RosterEntry {
+  participantId: string;
+  name: string;
 }
 
 export class EventRoom {
@@ -28,7 +42,8 @@ export class EventRoom {
 
     const { 0: client, 1: server } = new WebSocketPair();
     this.state.acceptWebSocket(server);
-    server.serializeAttachment({ lastSeen: Date.now() } satisfies Attachment);
+    const now = Date.now();
+    server.serializeAttachment({ lastSeen: now, firstSeen: now } satisfies Attachment);
 
     // Arm the sweep only when it isn't already running — a fresh connection
     // shouldn't reset an existing cycle, just make sure one exists.
@@ -36,10 +51,7 @@ export class EventRoom {
       await this.state.storage.setAlarm(Date.now() + SWEEP_INTERVAL_MS);
     }
 
-    // Broadcast updated count after the new socket is accepted
-    const count = this.state.getWebSockets().length;
-    console.log(`[EventRoom] New connection. Total: ${count}`);
-    this.broadcastParticipantCount();
+    console.log(`[EventRoom] New connection. Total: ${this.state.getWebSockets().length}`);
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -47,17 +59,21 @@ export class EventRoom {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     try {
       const data = JSON.parse(message as string);
-      ws.serializeAttachment({ lastSeen: Date.now() } satisfies Attachment);
+      const attachment = (ws.deserializeAttachment() as Attachment | null) ?? { lastSeen: Date.now(), firstSeen: Date.now() };
+      attachment.lastSeen = Date.now();
 
       if (data.type === 'ping') {
-        return; // liveness signal only — the attachment refresh above is the point
+        ws.serializeAttachment(attachment);
+        return; // liveness signal only — the lastSeen refresh above is the point
       } else if (data.type === 'broadcast') {
+        ws.serializeAttachment(attachment);
         this.broadcast(JSON.stringify(data.payload));
       } else if (data.type === 'join') {
-        // Client is ready — send it the current count
-        const count = this.state.getWebSockets().length;
-        console.log(`[EventRoom] Join received, sending count: ${count}`);
-        ws.send(JSON.stringify({ type: 'participant_count', payload: count }));
+        if (typeof data.participantId === 'string') attachment.participantId = data.participantId;
+        if (typeof data.name === 'string') attachment.name = data.name;
+        ws.serializeAttachment(attachment);
+        console.log(`[EventRoom] Join: ${attachment.name ?? 'unknown'} (${attachment.participantId ?? 'no id'})`);
+        this.broadcastRoster();
       }
     } catch (err) {
       console.error('[EventRoom] Message parse error', err);
@@ -67,37 +83,18 @@ export class EventRoom {
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     // Complete the close handshake
     try { ws.close(code, 'Closing'); } catch (_) {}
-
-    // IMPORTANT: During webSocketClose, the closing socket is STILL in getWebSockets().
-    // We must exclude it manually to get the correct remaining count.
-    const remaining = this.state.getWebSockets().filter(s => s !== ws);
-    const count = remaining.length;
-    console.log(`[EventRoom] Connection closed (code=${code}). Remaining: ${count}`);
-
-    // Broadcast only to the remaining sockets (not the one that just closed)
-    const msg = JSON.stringify({ type: 'participant_count', payload: count });
-    for (const sock of remaining) {
-      try { sock.send(msg); } catch (_) {}
-    }
+    console.log(`[EventRoom] Connection closed (code=${code}).`);
+    this.broadcastRoster(ws);
   }
 
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
     console.error('[EventRoom] WebSocket error:', error);
     try { ws.close(1011, 'Error'); } catch (_) {}
-
-    // Same logic: exclude the erroring socket from count and broadcast
-    const remaining = this.state.getWebSockets().filter(s => s !== ws);
-    const count = remaining.length;
-    console.log(`[EventRoom] After error. Remaining: ${count}`);
-
-    const msg = JSON.stringify({ type: 'participant_count', payload: count });
-    for (const sock of remaining) {
-      try { sock.send(msg); } catch (_) {}
-    }
+    this.broadcastRoster(ws);
   }
 
   // Sweeps for sockets that have gone quiet longer than STALE_TIMEOUT_MS and
-  // force-closes them (webSocketClose does the count cleanup/broadcast for
+  // force-closes them (webSocketClose does the roster cleanup/broadcast for
   // free). Reschedules itself only while connections remain, so an idle room
   // costs nothing between alarms and stops costing anything at all once empty.
   async alarm(): Promise<void> {
@@ -120,10 +117,22 @@ export class EventRoom {
     }
   }
 
-  broadcastParticipantCount() {
-    const count = this.state.getWebSockets().length;
-    console.log(`[EventRoom] Broadcasting count: ${count}`);
-    this.broadcast(JSON.stringify({ type: 'participant_count', payload: count }));
+  // `excludeWs` — during webSocketClose/webSocketError, the closing socket is
+  // still present in getWebSockets(), so it must be filtered out by reference
+  // to get the roster as it will be a moment later.
+  broadcastRoster(excludeWs?: WebSocket) {
+    const entries: (RosterEntry & { firstSeen: number })[] = [];
+    for (const ws of this.state.getWebSockets()) {
+      if (ws === excludeWs) continue;
+      const attachment = ws.deserializeAttachment() as Attachment | null;
+      if (attachment?.participantId && attachment.name) {
+        entries.push({ participantId: attachment.participantId, name: attachment.name, firstSeen: attachment.firstSeen });
+      }
+    }
+    entries.sort((a, b) => a.firstSeen - b.firstSeen); // stable arrival order for the lobby scene
+    const roster: RosterEntry[] = entries.map(({ participantId, name }) => ({ participantId, name }));
+    console.log(`[EventRoom] Broadcasting roster: ${roster.length} identified participant(s)`);
+    this.broadcast(JSON.stringify({ type: 'roster', payload: roster }));
   }
 
   broadcast(message: string) {

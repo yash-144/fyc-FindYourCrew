@@ -14,7 +14,7 @@ export default async function LobbyPage() {
   // Verify participant
   const { data: participant } = await supabase
     .from('event_participants')
-    .select('event_id, events(status)')
+    .select('id, event_id, events(status)')
     .eq('profile_id', user.id)
     .order('joined_at', { ascending: false })
     .limit(1)
@@ -36,5 +36,12 @@ export default async function LobbyPage() {
   // The lobby is its own scene (a dark crew-assembly room) rather than the
   // paper/ink chrome the rest of the app uses — it owns its full viewport,
   // including a minimal self-styled corner control instead of AppHeader.
-  return <LobbyClient eventId={participant.event_id} selfName={fullName} selfAvatarUrl={avatarUrl} />
+  return (
+    <LobbyClient
+      eventId={participant.event_id}
+      selfParticipantId={participant.id}
+      selfName={fullName}
+      selfAvatarUrl={avatarUrl}
+    />
+  )
 }
