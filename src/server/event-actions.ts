@@ -33,14 +33,14 @@ export async function createEvent(name: string) {
 
   const { data, error } = await supabase.from('events').insert({
     name,
-    status: 'SETUP'
+    status: 'LOBBY'
   }).select('id').single()
 
   if (error) throw error
 
   await supabase.from('event_state').insert({
     event_id: data.id,
-    status: 'SETUP'
+    status: 'LOBBY'
   })
 
   // Add dummy questions for local testing

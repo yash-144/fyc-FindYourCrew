@@ -12,9 +12,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'questions', label: 'Question CMS' },
 ]
 
+// SETUP and LOBBY were previously two separate admin phases requiring two
+// clicks ("Open Lobby" then "Begin Game") for something participants never
+// saw a difference between — both statuses render the identical lobby scene.
+// SETUP is kept here only as a legacy alias so an event created before this
+// collapse still shows up as "Lobby" instead of an unrecognized phase.
 const PHASES = [
-  { id: 'SETUP', label: 'Setup', match: ['SETUP'] },
-  { id: 'LOBBY', label: 'Lobby', match: ['LOBBY', 'PRE_GAME'] },
+  { id: 'LOBBY', label: 'Lobby', match: ['SETUP', 'LOBBY', 'PRE_GAME'] },
   { id: 'QUESTIONS', label: 'Questions', match: ['QUESTION_INTRO', 'QUESTION_ACTIVE', 'QUESTION_LOCKED'] },
   { id: 'MATCHING', label: 'Matching', match: ['MATCHING'] },
   { id: 'GROUP_CHAT_OPEN', label: 'Group Chat', match: ['GROUP_CHAT_OPEN'] },
@@ -59,22 +63,20 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
 
   const handleAdvanceEvent = () =>
     runAction(async () => {
-      const currentStatus = eventState?.status || 'SETUP'
+      const currentStatus = eventState?.status || 'LOBBY'
       const currentQId = eventState?.active_question_id
 
       let nextStatus = ''
       let extraArgs: { questionId?: string; durationSeconds?: number } = {}
 
-      if (currentStatus === 'SETUP') {
-        nextStatus = 'LOBBY'
-      } else if (currentStatus === 'LOBBY') {
+      if (currentStatus === 'SETUP' || currentStatus === 'LOBBY') {
         // A beat in the lobby announcing the game is starting, before the
         // first task intro — gives the room a moment to settle.
         nextStatus = 'PRE_GAME'
       } else if (currentStatus === 'PRE_GAME') {
         if (questions.length > 0) {
-          // Intro only — no timer yet. The auditorium video plays during
-          // this phase; the answer timer starts on the next advance.
+          // Intro only — no timer yet. Gives participants a beat to read the
+          // question before the answer timer starts on the next advance.
           nextStatus = 'QUESTION_INTRO'
           extraArgs = { questionId: questions[0].id }
         } else {
@@ -107,11 +109,10 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
     })
 
   const getNextStateLabel = () => {
-    const currentStatus = eventState?.status || 'SETUP'
+    const currentStatus = eventState?.status || 'LOBBY'
     const currentQId = eventState?.active_question_id
 
-    if (currentStatus === 'SETUP') return 'Open Lobby'
-    if (currentStatus === 'LOBBY') return 'Begin Game'
+    if (currentStatus === 'SETUP' || currentStatus === 'LOBBY') return 'Begin Game'
     if (currentStatus === 'PRE_GAME') {
       return questions.length > 0 ? `Show Task 1 Intro: ${questions[0].title}` : 'Start Matching'
     }
@@ -224,7 +225,7 @@ export function AdminClient({ eventId, eventState, questions }: { eventId: strin
               )}
               {eventState?.status === 'QUESTION_INTRO' && (
                 <p className="font-mono text-xs text-red mt-1">
-                  ▶ Play the auditorium video now — advance to reveal the question &amp; start the timer.
+                  ▶ Question is on screen — advance to start the timer.
                 </p>
               )}
             </div>

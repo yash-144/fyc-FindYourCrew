@@ -197,8 +197,10 @@ function EventPhase({
     return (
       <div className="text-center space-y-5 max-w-sm">
         <div className="crew-label-red">Task {String(questionData?.position ?? '').padStart(2, '0')}</div>
-        <div className="font-display font-bold text-3xl text-starlight">Watch the screen.</div>
-        <p className="text-starlight-dim">A video is playing on the auditorium screen — it&rsquo;s the basis for the next task. This platform won&rsquo;t show it.</p>
+        <div className="font-display font-bold text-2xl text-starlight leading-snug">
+          {questionData?.title || 'Get ready.'}
+        </div>
+        <p className="text-starlight-dim">The timer starts next — get ready to answer.</p>
         <div className="flex justify-center gap-2 pt-2">
           {[0, 1, 2].map((i) => (
             <span key={i} className="w-2 h-2 rounded-full bg-red matching-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
