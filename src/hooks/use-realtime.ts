@@ -13,7 +13,13 @@ export function useRealtime(eventId: string, groupId?: string) {
     let mounted = true
     let activeWs: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let pingInterval: ReturnType<typeof setInterval> | null = null
     let retryDelay = 1000
+
+    // Keeps the Durable Object's liveness check happy — without this, an
+    // idle-but-still-open tab (nothing to broadcast, just sitting in the
+    // lobby) would look identical to an abandoned connection and get swept.
+    const PING_INTERVAL_MS = 25_000
 
     const connect = async () => {
       if (!mounted) return
@@ -38,6 +44,13 @@ export function useRealtime(eventId: string, groupId?: string) {
           retryDelay = 1000 // reset backoff on success
           if (mounted) setConnected(true)
           ws.send(JSON.stringify({ type: 'join' }))
+
+          if (pingInterval) clearInterval(pingInterval)
+          pingInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping' }))
+            }
+          }, PING_INTERVAL_MS)
         }
 
         ws.onmessage = (event) => {
@@ -58,6 +71,10 @@ export function useRealtime(eventId: string, groupId?: string) {
 
         ws.onclose = (e) => {
           console.log(`[Realtime] Disconnected (code=${e.code})`)
+          if (pingInterval) {
+            clearInterval(pingInterval)
+            pingInterval = null
+          }
           if (mounted) {
             setConnected(false)
             // Reconnect unless we closed it intentionally (code 1000)
@@ -94,6 +111,7 @@ export function useRealtime(eventId: string, groupId?: string) {
       mounted = false
       window.removeEventListener('beforeunload', handleBeforeUnload)
       if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (pingInterval) clearInterval(pingInterval)
       if (activeWs) activeWs.close(1000, 'Component unmounted')
     }
   }, [eventId, groupId])
