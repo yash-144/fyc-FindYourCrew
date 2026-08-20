@@ -51,19 +51,23 @@ async function main() {
     console.log('[cleanup] throwaway event removed')
   }
 
-  // Sequential deleteUser calls can transient-fail under Supabase's admin API
-  // rate limiting when there are hundreds of them back to back — retry each
-  // failure a couple of times with a short backoff rather than silently
-  // giving up (this bit us once during testing: the first pass reported
-  // "deleted 0/20" with the real cause swallowed).
+  // `profiles.id references auth.users(id)` with no ON DELETE CASCADE, and
+  // an on_auth_user_created trigger auto-creates a profiles row for every
+  // synthetic user the moment it's created. Deleting the auth user before
+  // its profiles row is gone violates that FK and deleteUser fails with a
+  // generic 500 ("Database error deleting user") — profiles must go first.
+  // Also retry each failure a couple of times with a short backoff since
+  // hundreds of sequential admin API calls can transient-fail under rate
+  // limiting.
   let deleted = 0
   const stillFailed = []
   for (const u of manifest.users) {
     let ok = false
     for (let attempt = 0; attempt < 3 && !ok; attempt += 1) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 500 * attempt))
+      await admin.from('profiles').delete().eq('id', u.authId)
       const { error } = await admin.auth.admin.deleteUser(u.authId)
-      if (!error) { ok = true; deleted += 1; await admin.from('profiles').delete().eq('id', u.authId) }
+      if (!error) { ok = true; deleted += 1 }
       else if (attempt === 2) { console.error(`[cleanup] failed to delete ${u.email}: ${error.message}`); stillFailed.push(u.email) }
     }
   }
