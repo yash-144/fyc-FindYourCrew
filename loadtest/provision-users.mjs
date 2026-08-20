@@ -51,25 +51,38 @@ function b64url(s) {
   return Buffer.from(s, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-async function makeUser(i) {
+async function createOneUser(i) {
   const email = `${RUN_TAG}-u${i}@test.invalid`
   const password = `Test-${RUN_TAG}-${i}!`
   const { data: userData, error } = await admin.auth.admin.createUser({
     email, password, email_confirm: true, user_metadata: { full_name: `LoadTest ${i}` },
   })
   if (error) throw new Error(`createUser ${i} failed: ${error.message}`)
+  return { index: i, authId: userData.user.id, email, password, name: `LoadTest ${i}` }
+}
 
+// signInWithPassword shares GoTrue's sign-in rate limit bucket, which is far
+// stingier than the admin createUser endpoint — bursting it concurrently
+// reliably fails around the same count regardless of concurrency, so this
+// runs strictly sequentially with backoff-on-429 rather than through the
+// same worker pool used for account creation.
+async function signInOne(u) {
   const anon = createClient(SUPABASE_URL, ANON_KEY)
-  const { data: session, error: signInErr } = await anon.auth.signInWithPassword({ email, password })
-  if (signInErr) throw new Error(`signIn ${i} failed: ${signInErr.message}`)
-
-  return {
-    index: i,
-    authId: userData.user.id,
-    email,
-    name: `LoadTest ${i}`,
-    accessToken: session.session.access_token,
-    cookieValue: 'base64-' + b64url(JSON.stringify(session.session)),
+  let delay = 2000
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const { data: session, error } = await anon.auth.signInWithPassword({ email: u.email, password: u.password })
+    if (!error) {
+      return {
+        ...u,
+        accessToken: session.session.access_token,
+        cookieValue: 'base64-' + b64url(JSON.stringify(session.session)),
+      }
+    }
+    const isRateLimit = /rate limit/i.test(error.message)
+    if (!isRateLimit || attempt === 5) throw new Error(`signIn ${u.index} failed: ${error.message}`)
+    console.log(`[provision]   rate-limited signing in user ${u.index}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/6)...`)
+    await new Promise((r) => setTimeout(r, delay))
+    delay = Math.min(delay * 2, 30_000)
   }
 }
 
@@ -89,7 +102,14 @@ async function pool(items, worker, concurrency) {
 async function main() {
   console.log(`[provision] creating ${COUNT} synthetic users (tag=${RUN_TAG})...`)
   const indices = Array.from({ length: COUNT }, (_, i) => i)
-  const users = await pool(indices, makeUser, CREATE_CONCURRENCY)
+  const created = await pool(indices, createOneUser, CREATE_CONCURRENCY)
+  console.log(`[provision] ${created.length} accounts created, signing in sequentially...`)
+
+  const users = []
+  for (const u of created) {
+    users.push(await signInOne(u))
+    if (users.length % 20 === 0) console.log(`[provision]   ${users.length}/${created.length} signed in`)
+  }
   console.log(`[provision] ${users.length} users created and signed in`)
 
   console.log('[provision] creating throwaway event + a couple of questions...')
